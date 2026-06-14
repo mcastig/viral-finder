@@ -1,13 +1,42 @@
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ---------------------------------------------------------------------------
+   Design tokens. Light is the default; [data-theme="dark"] overrides them.
+   The no-flash script in layout.tsx sets data-theme before first paint.
+--------------------------------------------------------------------------- */
+:root,
+:root[data-theme="light"] {
+  --background: #f7f8fa;
+  --surface: #ffffff;
+  --surface-hover: #eef0f4;
+  --foreground: #15171c;
+  --muted: #6b7280;
+  --border: #e3e6ec;
+
+  --accent: #ff3d54;
+  --accent-hover: #e62f45;
+
+  --shadow: rgba(20, 23, 28, 0.06);
+  --shadow-accent: rgba(255, 61, 84, 0.18);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root[data-theme="dark"] {
+  --background: #0c0e13;
+  --surface: #15181f;
+  --surface-hover: #1e222b;
+  --foreground: #f1f3f7;
+  --muted: #9aa3b2;
+  --border: #262b35;
+
+  --accent: #ff4d63;
+  --accent-hover: #ff6478;
+
+  --shadow: rgba(0, 0, 0, 0.4);
+  --shadow-accent: rgba(255, 77, 99, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
 html {
@@ -26,15 +55,12 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease;
 }
 
 a {
@@ -42,8 +68,6 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+button {
+  font-family: inherit;
 }
