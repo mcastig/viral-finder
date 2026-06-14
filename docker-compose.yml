@@ -1,0 +1,30 @@
+# Local PostgreSQL for Viral Finder.
+# Credentials/db here match the default DATABASE_URL in .env.example:
+#   postgresql://postgres:postgres@localhost:5432/viral_finder?schema=public
+#
+# Usage:
+#   docker compose up -d      # start Postgres in the background
+#   docker compose down       # stop it (data is preserved in the volume)
+#   docker compose down -v    # stop it AND wipe the data volume
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: viral-finder-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: viral_finder
+    ports:
+      - "5432:5432"
+    volumes:
+      - viral-finder-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d viral_finder"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  viral-finder-pgdata:
