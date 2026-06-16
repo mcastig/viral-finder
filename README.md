@@ -5,6 +5,10 @@ their own channel** — videos pulling **3× or more** their channel's average
 views. Results are persisted to PostgreSQL and reused as a cache so repeat
 searches don't burn YouTube API quota.
 
+<img width="1681" height="872" alt="Captura de pantalla 2026-06-16 a la(s) 2 23 40 a m" src="https://github.com/user-attachments/assets/e4610f15-04a3-4981-9c4e-db841d3996d6" />
+
+<img width="1685" height="877" alt="Captura de pantalla 2026-06-16 a la(s) 2 24 00 a m" src="https://github.com/user-attachments/assets/cab62655-a272-4892-b6b5-c2f3fea810f9" />
+
 ## Features
 
 - Search any topic and get a grid of **outlier** videos (views ≥ 3× the
