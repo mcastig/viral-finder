@@ -15,10 +15,14 @@ jest.mock("@/lib/prisma", () => ({
   },
 }));
 jest.mock("@/lib/youtube", () => ({ fetchOutliersFromYouTube: jest.fn() }));
+jest.mock("@/lib/rateLimit", () => ({ checkRateLimit: jest.fn() }));
+jest.mock("next/headers", () => ({ headers: jest.fn() }));
 
 import { findOutliers } from "./findOutliers";
 import { prisma } from "@/lib/prisma";
 import { fetchOutliersFromYouTube } from "@/lib/youtube";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { headers } from "next/headers";
 
 const mockPrisma = prisma as unknown as {
   searchQuery: { findUnique: jest.Mock; upsert: jest.Mock };
@@ -30,6 +34,13 @@ const mockPrisma = prisma as unknown as {
   $transaction: jest.Mock;
 };
 const mockFetchOutliers = fetchOutliersFromYouTube as jest.Mock;
+const mockCheckRateLimit = checkRateLimit as jest.Mock;
+const mockHeaders = headers as jest.Mock;
+
+/** Builds a minimal mocked `headers()` result exposing `.get()`. */
+function headersWith(forwardedFor: string | null) {
+  return { get: (name: string) => (name === "x-forwarded-for" ? forwardedFor : null) };
+}
 
 function row(overrides: Partial<YoutubeVideo> = {}): YoutubeVideo {
   return {
@@ -74,6 +85,9 @@ beforeEach(() => {
   mockPrisma.$transaction.mockImplementation(
     async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma),
   );
+  // Defaults: a client IP is present and under the rate limit.
+  mockHeaders.mockResolvedValue(headersWith("203.0.113.7"));
+  mockCheckRateLimit.mockResolvedValue(true);
 });
 
 describe("findOutliers", () => {
@@ -157,16 +171,52 @@ describe("findOutliers", () => {
     expect(res.ok && res.data.videos).toEqual([]);
   });
 
-  it("returns the error message when an Error is thrown", async () => {
-    mockPrisma.searchQuery.findUnique.mockRejectedValue(new Error("db down"));
+  it("hides internal error details and logs them server-side", async () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const cause = new Error("db down: host=secret-internal:5432");
+    mockPrisma.searchQuery.findUnique.mockRejectedValue(cause);
+
     const res = await findOutliers("boom");
-    expect(res).toEqual({ ok: false, error: "db down" });
+
+    // Client gets a generic message; the real cause only hits the server log.
+    expect(res).toEqual({
+      ok: false,
+      error: "Something went wrong while searching. Please try again.",
+    });
+    expect(spy).toHaveBeenCalledWith("findOutliers failed:", cause);
+    spy.mockRestore();
   });
 
-  it("returns a generic message when a non-Error is thrown", async () => {
-    mockPrisma.searchQuery.findUnique.mockRejectedValue("weird");
-    const res = await findOutliers("boom");
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/Something went wrong/);
+  it("blocks the request when the rate limit is exceeded", async () => {
+    mockCheckRateLimit.mockResolvedValue(false);
+
+    const res = await findOutliers("flood");
+
+    expect(res).toEqual({
+      ok: false,
+      error: "Too many searches. Please wait a moment and try again.",
+    });
+    // Rate-limited before any quota or DB work.
+    expect(mockCheckRateLimit).toHaveBeenCalledWith("203.0.113.7");
+    expect(mockPrisma.searchQuery.findUnique).not.toHaveBeenCalled();
+    expect(mockFetchOutliers).not.toHaveBeenCalled();
+  });
+
+  it("uses the first x-forwarded-for hop, falling back to 'anonymous'", async () => {
+    mockPrisma.searchQuery.findUnique.mockResolvedValue({
+      id: "q1",
+      updatedAt: new Date(),
+      videos: [],
+    });
+
+    // Multiple hops -> take the original client IP.
+    mockHeaders.mockResolvedValue(headersWith("198.51.100.1, 10.0.0.1"));
+    await findOutliers("multi");
+    expect(mockCheckRateLimit).toHaveBeenLastCalledWith("198.51.100.1");
+
+    // Missing header -> 'anonymous'.
+    mockHeaders.mockResolvedValue(headersWith(null));
+    await findOutliers("noip");
+    expect(mockCheckRateLimit).toHaveBeenLastCalledWith("anonymous");
   });
 });

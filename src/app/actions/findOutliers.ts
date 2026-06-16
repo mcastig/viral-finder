@@ -1,7 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { fetchOutliersFromYouTube } from "@/lib/youtube";
+import { checkRateLimit } from "@/lib/rateLimit";
 import type { FindOutliersResponse, OutlierVideo } from "@/lib/types";
 import type { YoutubeVideo } from "@prisma/client";
 
@@ -40,6 +42,16 @@ export async function findOutliers(
   const keyword = rawKeyword.trim().toLowerCase();
   if (!keyword) {
     return { ok: false, error: "Please enter a search term." };
+  }
+
+  // Throttle per client IP before spending any YouTube quota or DB work.
+  const forwarded = (await headers()).get("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() || "anonymous";
+  if (!(await checkRateLimit(ip))) {
+    return {
+      ok: false,
+      error: "Too many searches. Please wait a moment and try again.",
+    };
   }
 
   try {
@@ -115,12 +127,12 @@ export async function findOutliers(
       },
     };
   } catch (error) {
+    // Log the real cause server-side; never leak internals (DB/driver details,
+    // stack traces) to the client.
+    console.error("findOutliers failed:", error);
     return {
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Something went wrong while searching. Please try again.",
+      error: "Something went wrong while searching. Please try again.",
     };
   }
 }
