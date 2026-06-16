@@ -1,0 +1,51 @@
+// Prisma schema for Viral Finder
+// Docs: https://www.prisma.io/docs
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Tracks every keyword a user has searched for.
+/// `updatedAt` powers the cache layer: if a query was refreshed recently
+/// we serve its stored videos instead of hitting the YouTube API again.
+model SearchQuery {
+  id        String         @id @default(cuid())
+  keyword   String         @unique
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  videos    YoutubeVideo[]
+
+  @@index([keyword])
+}
+
+/// A single YouTube video that qualified as an outlier for a given search.
+/// View counts are stored as BigInt because popular channels can exceed the
+/// 32-bit integer range.
+model YoutubeVideo {
+  id              String   @id @default(cuid())
+  youtubeId       String
+  title           String
+  thumbnailUrl    String
+  currentViews    BigInt
+  channelAvgViews BigInt
+  outlierFactor   Float
+  publishedAt     DateTime
+  channelId         String
+  channelName       String
+  channelUrl        String
+  /// null when the channel hides its subscriber count.
+  channelSubscribers BigInt?
+  createdAt         DateTime @default(now())
+
+  searchQuery   SearchQuery @relation(fields: [searchQueryId], references: [id], onDelete: Cascade)
+  searchQueryId String
+
+  // One row per (search, video) pair so re-running a search stays idempotent.
+  @@unique([searchQueryId, youtubeId])
+  @@index([searchQueryId])
+}
