@@ -6,8 +6,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection used by the app at runtime.
+  url       = env("DATABASE_URL")
+  // Direct (non-pooled) connection used by `prisma migrate`.
+  directUrl = env("DIRECT_URL")
 }
 
 /// Tracks every keyword a user has searched for.
